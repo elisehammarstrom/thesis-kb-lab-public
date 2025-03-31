@@ -136,11 +136,6 @@ Run specific models
 ./run_ocr_model_pipeline.sh --models "doctr,idefics"
 ```
 
-Run for a specific period
-```
-./run_ocr_model_pipeline.sh --period 1818-1870
-```
-
 Run with verbose output
 ```
 ./run_ocr_model_pipeline.sh --verbose
@@ -158,7 +153,7 @@ Specify batch size
 
 Combine multiple options
 ```
-./run_ocr_model_pipeline.sh --models "trocr,doctr" --period 1871-1906 --verbose
+./run_ocr_model_pipeline.sh --models "trocr,doctr" --verbose
 ```
 
 ### 7 Check output
@@ -176,7 +171,6 @@ The output structure will be:
   └── ocr_idefics/
 ```
 Where each directory will contain:
-- Period subdirectories (1818-1870, 1871-1906) based on your input data
 - Newspaper subdirectories
 - Text files with OCR results, named after the original images
 - Metrics directory with performance statistics
