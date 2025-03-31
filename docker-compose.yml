@@ -1,0 +1,135 @@
+services:
+
+  textbox-splitter:
+    build:
+      context: .
+      dockerfile: Dockerfile.textboxsplitter
+    volumes:
+      - ./process_textboxes:/app/process_textboxes
+      - ./images_jpg:/app/images_jpg
+      - ./images_pdf:/app/images_pdf
+      #- ./ocr_outputs/metrics:/app/ocr_outputs/ocr_tesseract_v5.3.0/metrics
+      - ./output:/app/output
+    command: python textbox_splitter.py
+
+  tesseract:
+    build:
+      context: .
+      dockerfile: Dockerfile.tesseract-cpu
+    volumes:
+      - ./output/extracted_text_boxes:/app/input
+      - ./ocr_model_processing:/app/ocr_model_processing
+      - ./ocr_utils.py:/app/ocr_utils.py
+      - ./ocr_outputs:/app/ocr_outputs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OCR_TESSERACT_DIR=/app/ocr_outputs/ocr_tesseract_v5.5.0
+      - INPUT_DIR=/app/input
+
+  kraken:
+    image: ocrd/kraken:latest
+    environment:
+      - PYTHONUNBUFFERED=1
+      - KRAKEN_DISABLE_COREML=1
+      - PYTHONIOENCODING=utf-8
+    volumes:
+      - ./ocr_model_processing/kraken_ocr_processing.py:/app/ocr_model_processing/kraken_ocr_processing.py
+      - ./ocr_utils.py:/app/ocr_utils.py
+      - ./ocr_model_processing:/app/ocr_model_processing
+      - ./models:/app/models
+      - ./output/extracted_text_boxes:/app/input
+      - ./ocr_outputs:/app/ocr_outputs
+      - ${HOME}/.cache/huggingface:/root/.cache/huggingface
+    working_dir: /app
+    command: python /app/ocr_model_processing/kraken_ocr_processing.py --verbose --batch-size 20 --cpu-only
+
+  trocr:
+    build:
+      context: .
+      dockerfile: Dockerfile.trocr
+    volumes:
+      - ./ocr_model_processing/kraken_ocr_processing.py:/app/ocr_model_processing/kraken_ocr_processing.py
+      - ./ocr_utils.py:/app/ocr_utils.py
+      - ./ocr_model_processing:/app/ocr_model_processing
+      - ./models:/app/models
+      - ./output/extracted_text_boxes:/app/input
+      - ./ocr_outputs:/app/ocr_outputs
+      - ${HOME}/.cache/huggingface:/root/.cache/huggingface
+    
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HF_TOKEN=${HF_TOKEN}
+    
+    #command: ["python", "process_trocr.py", "--verbose"]
+    command: python /app/ocr_model_processing/trocr_ocr_processing.py --verbose --batch-size 20
+
+  idefics:
+    build:
+      context: .
+      dockerfile: Dockerfile.idefics
+    volumes:
+      - ./ocr_model_processing:/app/ocr_model_processing
+      - ./output/extracted_text_boxes:/app/input
+      #- ./svenska-tidningar-1818-1870/images_jpg:/app/input_jpg/1818-1870
+      #- ./svenska-tidningar-1871-1906/images_jpg:/app/input_jpg/1871-1906
+      - ./ocr_outputs:/app/output
+      - ./ocr_utils.py:/app/ocr_utils.py
+      - ${HF_CACHE_DIR:-~/.cache/huggingface}:/app/.cache/huggingface
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+      - OMP_NUM_THREADS=1
+      - TOKENIZERS_PARALLELISM=false
+      - IDEFICS_INPUT_DIR=/app/input
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  ocr-json-integration:
+    build:
+      context: .
+      dockerfile: Dockerfile.add_data_to_json
+    volumes:
+      # Mount the OCR output directories
+      - ./ocr_outputs:/app/ocr_outputs
+      # Mount the JSON file
+      - ./old_data.json:/app/old_data.json
+      # Mount utils
+      - ./ocr_utils.py:/app/ocr_utils.py
+      - ./add_ocr_system_outputs_to_json.py:/app/add_ocr_system_outputs_to_json.py
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  doctr:
+    build:
+      context: .
+      dockerfile: Dockerfile.doctr
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - ./process_doctr.py:/app/process_doctr.py
+      - ./process_textboxes:/app/output
+      - ./svenska-tidningar-1818-1870:/app/svenska-tidningar-1818-1870
+      - ./svenska-tidningar-1871-1906:/app/svenska-tidningar-1871-1906
+      - ./doctr_results:/app/doctr_results
+      - ${HF_CACHE_DIR:-~/.cache/huggingface}:/root/.cache/huggingface
+
+              
+  general:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      # Mount your dataset directory
+      - ./ground_truth:/data
+      # Mount directory for output
+      - ./output:/output
+      - ./output/extracted_text_boxes:/images_jpg
+    # Override default command if needed
+    # command: --base-path /data --output /output/data_exploration/custom_analysis.json --visualize --viz-dir /output/data_exploration/visualizations

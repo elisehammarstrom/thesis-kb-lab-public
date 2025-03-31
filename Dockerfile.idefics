@@ -1,0 +1,52 @@
+FROM nvidia/cuda:11.8.0-base-ubuntu22.04
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Europe/Stockholm
+ENV PYTHONUNBUFFERED=1
+#ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:128
+ENV PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128
+ENV TRANSFORMERS_CACHE=/app/.cache/huggingface
+ENV HF_HOME=/app/.cache/huggingface
+ENV OMP_NUM_THREADS=1
+ENV TOKENIZERS_PARALLELISM=false
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    python3-pip \
+    python3-dev \
+    git \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Python dependencies in layers for better caching
+RUN pip3 install --no-cache-dir numpy==1.24.4 pillow==10.2.0
+
+# Fix: Use the correct PyTorch version string format
+#RUN pip3 install --no-cache-dir torch==2.0.1 torchvision==0.15.2 --extra-index-url https://download.pytorch.org/whl/cu118
+RUN pip3 install --no-cache-dir torch>=2.1.0 torchvision>=0.16.0 --extra-index-url https://download.pytorch.org/whl/cu118
+
+#RUN pip3 install --no-cache-dir transformers==4.37.2 accelerate==0.25.0 safetensors==0.4.2 bitsandbytes
+RUN pip3 install --no-cache-dir transformers>=4.38.0 accelerate>=0.25.0 safetensors>=0.4.2 bitsandbytes
+
+# Add memory optimization packages
+RUN pip3 install --no-cache-dir ninja packaging
+
+# Create cache directories
+RUN mkdir -p /app/.cache/huggingface
+
+# Copy scripts
+#COPY local_idefics_demo.py /app/
+#COPY process_batch.py /app/
+COPY ocr_model_processing/idefics_ocr_processing.py /app/
+
+# Create offload directory
+RUN mkdir -p /app/offload
+
+# Set default command
+#ENTRYPOINT ["python3", "local_idefics_demo.py"]
+ENTRYPOINT ["python3", "/app/ocr_model_processing/idefics_ocr_processing.py"]

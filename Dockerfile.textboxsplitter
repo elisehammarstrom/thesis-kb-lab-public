@@ -1,0 +1,33 @@
+FROM python:3.9-slim
+
+# Set noninteractive installation
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Europe/Stockholm
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    poppler-utils \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements_textboxsplitter.txt .
+RUN pip3 install --no-cache-dir -r requirements_textboxsplitter.txt
+
+# Copy application files
+COPY process_textboxes/textbox_splitter.py .
+
+# Create required directories
+RUN mkdir -p /app/images_pdf /app/images_jpg /app/output/extracted_text_boxes
+RUN chmod -R 777 /app/output
+
+# Set environment variables
+ENV INPUT_PDF_DIR=/app/images_pdf
+ENV INPUT_JPG_DIR=/app/images_jpg
+ENV OUTPUT_DIR=/app/output
+
+# Default command
+CMD ["python", "textbox_splitter.py"]

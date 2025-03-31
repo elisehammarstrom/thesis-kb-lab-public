@@ -1,0 +1,49 @@
+FROM python:3.9-slim
+
+# Install required packages for adding repositories
+RUN apt-get update && apt-get install -y \
+    wget \
+    gnupg \
+    lsb-release \
+    build-essential \
+    autoconf \
+    automake \
+    libtool \
+    pkg-config \
+    libpng-dev \
+    libjpeg-dev \
+    libtiff-dev \
+    zlib1g-dev \
+    libleptonica-dev \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Build and install a specific version of Tesseract (5.5.0)
+WORKDIR /tmp
+RUN git clone https://github.com/tesseract-ocr/tesseract.git && \
+    cd tesseract && \
+    git checkout 5.5.0 && \
+    ./autogen.sh && \
+    ./configure && \
+    make -j$(nproc) && \
+    make install && \
+    ldconfig && \
+    cd .. && \
+    rm -rf tesseract
+
+# Install language data (Swedish)
+WORKDIR /tmp
+RUN wget https://github.com/tesseract-ocr/tessdata/raw/main/swe.traineddata && \
+    mkdir -p /usr/local/share/tessdata && \
+    mv swe.traineddata /usr/local/share/tessdata/
+
+# Verify the installed Tesseract version
+RUN tesseract --version
+
+# Install Python packages
+RUN pip install --no-cache-dir pytesseract Pillow tqdm numpy pandas
+
+WORKDIR /app
+
+# Default command - can be overridden by docker-compose
+CMD ["python", "/app/ocr_model_processing/tesseract_ocr_processing.py"]
